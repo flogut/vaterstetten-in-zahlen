@@ -1,6 +1,6 @@
 library(shiny)
 library(shinydashboard)
-library(ggplot2)
+library(highcharter)
 
 mainPage <- new.env()
 sys.source("R/mainPage.R", envir = mainPage, chdir = FALSE)

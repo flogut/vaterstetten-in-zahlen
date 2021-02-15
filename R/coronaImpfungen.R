@@ -49,16 +49,16 @@ ui <- function(request, id) {
     fluidRow(
       box(
         title = "Geimpfte Personen (Erst-/Zweitgeimpfte)",
-        plotOutput(ns("geimpfte"), height = 300)
+        highchartOutput(ns("geimpfte"), height = 300)
       ),
       box(
         title = "Verabreichte Impfdosen",
-        plotOutput(ns("impfdosen"), height = 300)
+        highchartOutput(ns("impfdosen"), height = 300)
       ),
       box(
         title = "Online-Registrierungen",
         tagList(
-          plotOutput(ns("onlineanmeldungen"), height = 300),
+          highchartOutput(ns("onlineanmeldungen"), height = 300),
           HTML("Noch nicht angemeldet? Hier geht's zur bayerischen Impfregistrierung: <a href=\"https://impfzentren.bayern/citizen\">https://impfzentren.bayern/citizen</a>")
         )
       ),
@@ -137,47 +137,46 @@ server <- function(id) {
         )
       })
   
-      output$geimpfte <- renderPlot({
-        ggplot(filter(impfungenRaw, !is.na(erstimpfungen)), mapping = aes(x = datum)) + list(
-          geom_ribbon(aes(ymin = zweitimpfungen, ymax = erstimpfungen), alpha = 0.2, fill = "#0088dd", color = "#0088dd"),
-          geom_point(aes(y = erstimpfungen), alpha = 0.5, size = 1, color = "#0088dd"),
-          geom_area(aes(y = zweitimpfungen), alpha = 0.5, fill = "#0088dd", color = "#0088dd"),
-          geom_point(aes(y = zweitimpfungen), alpha = 0.5, size = 1, color = "#0088dd"),
-          if (input$showNumbers) list(
-            geom_text(aes(y = erstimpfungen, label = erstimpfungen), vjust = "bottom", hjust = "middle", nudge_y = 120, check_overlap = TRUE, size = 3.4, color = "#004b7a"),
-            geom_text(aes(y = zweitimpfungen, label = zweitimpfungen), vjust = "bottom", hjust = "middle", nudge_y = 120, check_overlap = TRUE, size = 3.4, color = "#004b7a")
-          ) else list(),
-          expand_limits(y = 0),
-          getDateScale(),
-          getYScale()
-        )
-      }, res = 96)
+      output$geimpfte <- renderHighchart({
+        # hchart(fallzahlen, "column", hcaes(x=datum, y=aktuell))
+        hc <- highchart() %>% 
+          hc_chart(animation=FALSE) %>% 
+          hc_plotOptions(series=list(dataLabels=list(enabled=input$showNumbers))) %>%
+          hc_xAxis(labels = list(format="{value:%d.%m.%Y}<br>")) %>%
+          hc_scrollbar(enabled=TRUE, liveRedraw=TRUE) %>%
+          hc_rangeSelector(enabled = TRUE, inputDateFormat="%d.%m.%Y", selected=0) %>%
+          # hc_navigator(enabled=TRUE) %>%
+          hc_legend(enabled=FALSE) %>%
+          hc_tooltip(headerFormat="{point.key:%d.%m.%Y}<br>", shared=TRUE) %>%
+          hc_add_series(impfungenRaw, "area", hcaes(x=datum, y=erstimpfungen), name="Erstimpfungen", animation=FALSE, connectNulls=TRUE) %>%
+          hc_add_series(impfungenRaw, "area", hcaes(x=datum, y=zweitimpfungen), name="Zweitimpfungen", animation=FALSE, connectNulls=TRUE)
+      })
   
-      output$impfdosen <- renderPlot({
-        ggplot(filter(impfungenRaw, !is.na(zweitimpfungen)), mapping = aes(x = datum, y = erstimpfungen + zweitimpfungen)) + list(
-          geom_line(alpha = 0.5),
-          geom_point(alpha = 0.5, size = 1),
-          if (input$showNumbers)
-            geom_text(aes(label = erstimpfungen + zweitimpfungen), vjust = "bottom", hjust = "middle", nudge_y = 150, check_overlap = TRUE, size = 3.4, na.rm = TRUE)
-          else list(),
-          expand_limits(y = 0),
-          getDateScale(),
-          getYScale()
-        )
-      }, res = 96)
+      output$impfdosen <- output$aktuell <- renderHighchart({
+        hc <- highchart() %>% 
+          hc_chart(animation=FALSE) %>% 
+          hc_plotOptions(series=list(dataLabels=list(enabled=input$showNumbers))) %>%
+          hc_xAxis(labels = list(format="{value:%d.%m.%Y}<br>")) %>%
+          hc_scrollbar(enabled=TRUE, liveRedraw=TRUE) %>%
+          hc_rangeSelector(enabled = TRUE, inputDateFormat="%d.%m.%Y", selected=0) %>%
+          # hc_navigator(enabled=TRUE) %>%
+          hc_legend(enabled=FALSE) %>%
+          hc_tooltip(headerFormat="", pointFormat="{point.x:%d.%m.%Y}: <b>{point.y}</b>") %>%
+          hc_add_series(impfungenRaw, "line", hcaes(x=datum, y=erstimpfungen+zweitimpfungen), name="Impfdosen", animation=FALSE, connectNulls=TRUE)
+      })
 
-      output$onlineanmeldungen <- renderPlot({
-        ggplot(filter(impfungenRaw, !is.na(onlineanmeldungen)), mapping = aes(x = datum, y = onlineanmeldungen)) + list(
-          geom_line(alpha = 0.5),
-          geom_point(alpha = 0.5, size = 1),
-          if (input$showNumbers)
-            geom_text(aes(label = onlineanmeldungen), vjust = "bottom", hjust = "middle", nudge_y = 800, check_overlap = TRUE, size = 3.4, na.rm = TRUE)
-          else list(),
-          expand_limits(y = 0),
-          getDateScale(),
-          getYScale()
-        )
-      }, res = 96)
+      output$onlineanmeldungen <- output$aktuell <- renderHighchart({
+        hc <- highchart() %>% 
+          hc_chart(animation=FALSE) %>% 
+          hc_plotOptions(series=list(dataLabels=list(enabled=input$showNumbers))) %>%
+          hc_xAxis(labels = list(format="{value:%d.%m.%Y}<br>")) %>%
+          hc_scrollbar(enabled=TRUE, liveRedraw=TRUE) %>%
+          hc_rangeSelector(enabled = TRUE, inputDateFormat="%d.%m.%Y", selected=0) %>%
+          # hc_navigator(enabled=TRUE) %>%
+          hc_legend(enabled=FALSE) %>%
+          hc_tooltip(headerFormat="", pointFormat="{point.x:%d.%m.%Y}: <b>{point.y}</b>") %>%
+          hc_add_series(impfungenRaw, "line", hcaes(x=datum, y=onlineanmeldungen), name="Anmeldungen", animation=FALSE, connectNulls=TRUE)
+      })
     }
   )
 }

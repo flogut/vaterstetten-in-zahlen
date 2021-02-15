@@ -47,17 +47,6 @@ ui <- function(request, id) {
     ),
 
     flowLayout(
-      dateRangeInput(ns("dateRange"),
-        label = NULL,
-        start = max(fallzahlen$datum) - 28,
-        end = max(fallzahlen$datum),
-        min = min(fallzahlen$datum),
-        max = max(fallzahlen$datum),
-        format = "d. M yyyy",
-        weekstart = 1,
-        language = "de",
-        separator = "bis"
-      ),
       checkboxInput(ns("showNumbers"),
         label = "Zahlenwerte anzeigen",
         value = FALSE
@@ -67,15 +56,15 @@ ui <- function(request, id) {
     fluidRow(
       box(
         title = "Neuinfektionen (absolut)",
-        plotOutput(ns("neuinfektionen"), height = 300)
+        highchartOutput(ns("neuinfektionen"), height = 300)
       ),
       box(
         title = "7-Tages-Inzidenz pro 100.000 Einwohner",
-        plotOutput(ns("inzidenz7"), height = 300)
+        highchartOutput(ns("inzidenz7"), height = 300)
       ),
       box(
         title = "Aktuelle Fälle (absolut)",
-        plotOutput(ns("aktuell"), height = 300)
+        highchartOutput(ns("aktuell"), height = 300)
       ),
     ),
 
@@ -101,35 +90,6 @@ server <- function(id) {
     id,
     function(input, output, session) {
       setBookmarkExclude(c("dateRange"))
-
-      getDateScale <- function() {
-        list(
-          scale_x_date(
-            name = NULL,
-            breaks = breaks_pretty(8),
-            date_minor_breaks = "1 days",
-            date_labels = "%d.%m.",
-            expand = expansion(add = c(0.5, 1))
-          ),
-          coord_cartesian(xlim = c(input$dateRange[1], input$dateRange[2]))
-        )
-      }
-
-      getYScale <- function() {
-        scale_y_continuous(
-          name = NULL,
-          breaks = breaks_pretty(5),
-          expand = expansion(mult = c(0.02, 0.1))
-        )
-      }
-
-      fallzahlenInTimeRange <- reactive({
-        fallzahlen %>%
-          # we increase the range by 2 on both sides to have an ongoing curve
-          # we could also just plot the whole data but this reduces the computational effort
-          filter(input$dateRange[1] - 2 <= datum) %>%  # the logical and (&&) doesn't allow element-wise operations, so we split them
-          filter(datum <= input$dateRange[2] + 2)
-      })
 
       output$valueBoxAktuell <- renderValueBox({
         lastRowWithAktuell <- fallzahlen %>% filter(!is.na(aktuell)) %>% slice_tail()
@@ -161,42 +121,44 @@ server <- function(id) {
         )
       })
 
-      output$neuinfektionen <- renderPlot({
-        ggplot(fallzahlenInTimeRange(), mapping = aes(x = datum, y = neuinfektionen)) + list(
-          geom_col(na.rm = TRUE, alpha = 0.5),
-          if (input$showNumbers)
-            geom_text(aes(label = neuinfektionen), vjust = "bottom", hjust = "middle", nudge_y = 0.5, check_overlap = TRUE, size = 3.4, na.rm = TRUE)
-          else list(),
-          getDateScale(),
-          getYScale()
-        )
-      }, res = 96)
-
-      output$inzidenz7 <- renderPlot({
-        ggplot(fallzahlenInTimeRange(), mapping = aes(x = datum, y = inzidenz7)) + list(
-          geom_line(na.rm = TRUE, alpha = 0.5),
-          geom_point(na.rm = TRUE, alpha = 0.5, size = 1),
-          if (input$showNumbers)
-            geom_text(aes(label = round(inzidenz7)), vjust = "bottom", hjust = "middle", nudge_y = 8, check_overlap = TRUE, size = 3.4, na.rm = TRUE)
-          else list(),
-          expand_limits(y = 0),
-          getDateScale(),
-          getYScale()
-        )
-      }, res = 96)
-
-      output$aktuell <- renderPlot({
-        ggplot(fallzahlenInTimeRange(), mapping = aes(x = datum, y = aktuell)) + list(
-          geom_line(data = filter(fallzahlenInTimeRange(), !is.na(aktuell)), alpha = 0.5),
-          geom_point(na.rm = TRUE, alpha = 0.5, size = 1),
-          if (input$showNumbers)
-            geom_text(aes(label = aktuell), vjust = "bottom", hjust = "middle", nudge_y = 2.5, check_overlap = TRUE, size = 3.4, na.rm = TRUE)
-          else list(),
-          expand_limits(y = 0),
-          getDateScale(),
-          getYScale()
-        )
-      }, res = 96)
+      output$neuinfektionen <- renderHighchart({
+        hc <- highchart() %>% 
+          hc_chart(animation=FALSE) %>% 
+          hc_plotOptions(series=list(dataLabels=list(enabled=input$showNumbers))) %>%
+          hc_xAxis(labels = list(format="{value:%d.%m.%Y}<br>")) %>%
+          hc_scrollbar(enabled=TRUE, liveRedraw=TRUE) %>%
+          hc_rangeSelector(enabled = TRUE, inputDateFormat="%d.%m.%Y", selected=0) %>%
+          # hc_navigator(enabled=TRUE) %>% # Shows a zoom bar below the plot, needs more space than 400px
+          hc_legend(enabled=FALSE) %>%
+          hc_tooltip(headerFormat="", pointFormat="{point.x:%d.%m.%Y}: <b>{point.y}</b>") %>%
+          hc_add_series(fallzahlen, "column", hcaes(x=datum, y=neuinfektionen), name="Neuinfektionen", animation=FALSE)
+      })
+      
+      output$inzidenz7 <- renderHighchart({
+        hc <- highchart() %>% 
+          hc_chart(animation=FALSE) %>% 
+          hc_plotOptions(series=list(dataLabels=list(enabled=input$showNumbers, format="{point.y:.0f}"))) %>%
+          hc_xAxis(labels = list(format="{value:%d.%m.%Y}<br>")) %>%
+          hc_scrollbar(enabled=TRUE, liveRedraw=TRUE) %>%
+          hc_rangeSelector(enabled = TRUE, inputDateFormat="%d.%m.%Y", selected=0) %>%
+          # hc_navigator(enabled=TRUE) %>%
+          hc_legend(enabled=FALSE) %>%
+          hc_tooltip(headerFormat="", pointFormat="{point.x:%d.%m.%Y}: <b>{point.y:.0f}</b>") %>%
+          hc_add_series(fallzahlen, "line", hcaes(x=datum, y=inzidenz7), name="Inzidenz", animation=FALSE, connectNulls=TRUE)
+      })
+      
+      output$aktuell <- renderHighchart({
+        hc <- highchart() %>% 
+          hc_chart(animation=FALSE) %>% 
+          hc_plotOptions(series=list(dataLabels=list(enabled=input$showNumbers))) %>%
+          hc_xAxis(labels = list(format="{value:%d.%m.%Y}<br>")) %>%
+          hc_scrollbar(enabled=TRUE, liveRedraw=TRUE) %>%
+          hc_rangeSelector(enabled = TRUE, inputDateFormat="%d.%m.%Y", selected=0) %>%
+          # hc_navigator(enabled=TRUE) %>%
+          hc_legend(enabled=FALSE) %>%
+          hc_tooltip(headerFormat="", pointFormat="{point.x:%d.%m.%Y}: <b>{point.y}</b>") %>%
+          hc_add_series(fallzahlen, "line", hcaes(x=datum, y=aktuell), name="Aktuell", animation=FALSE, connectNulls=TRUE)
+      })
     }
   )
 }
