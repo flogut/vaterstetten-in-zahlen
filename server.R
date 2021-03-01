@@ -11,8 +11,6 @@ sys.source("R/coronaImpfungen.R", envir = coronaImpfungen, chdir = FALSE)
 impressum <- new.env()
 sys.source("R/impressum.R", envir = impressum, chdir = FALSE)
 
-theme_set(theme_light())
-
 ui <- function(request) {
   dashboardPage(skin = "purple",
     dashboardHeader(
